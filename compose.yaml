@@ -1,0 +1,29 @@
+services:
+  web:
+    build: .
+    image: buchi-inclusion:latest
+    environment:
+      PORT: "8080"
+    ports:
+      # 宿主机端口可配置：HOST_PORT=9090 docker compose up
+      - "${HOST_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,os,urllib.request;port=os.environ.get('PORT','8080');r=urllib.request.urlopen(f'http://127.0.0.1:{port}/health',timeout=3);assert json.load(r)['status']=='ok'"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
+
+  verify:
+    build: .
+    image: buchi-inclusion:latest
+    profiles: ["verify"]
+    depends_on:
+      web:
+        condition: service_healthy
+    environment:
+      HEALTH_URL: "http://web:8080/health"
+    # 运行代码测试（包含/反例/非确定分支/输入校验边界）→ 构建检查
+    # → 请求健康地址做 HTTP 冒烟；结束即退出，退出码报告验收结果。
+    # 用法：docker compose run --rm verify
+    command: ["python", "scripts/acceptance.py"]

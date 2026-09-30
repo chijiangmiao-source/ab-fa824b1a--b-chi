@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Büchi 自动机语言包含性复核台</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #181f2e;
+    --panel2: #1f2839;
+    --line: #2c3852;
+    --text: #e6ebf5;
+    --muted: #94a3b8;
+    --accent: #4f8cff;
+    --ok: #2fbf71;
+    --bad: #ff5d6c;
+    --warn: #f5a623;
+    --accept: #8b5cf6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 14px/1.55 "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 18px; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 12.5px; }
+  main {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 46%);
+    gap: 18px; padding: 18px 24px; align-items: start;
+  }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 16px 18px;
+  }
+  .panel h2 { font-size: 14.5px; margin: 0 0 12px; }
+  label { display: block; font-size: 12.5px; color: var(--muted); margin: 10px 0 4px; }
+  input[type=text] {
+    width: 100%; background: var(--panel2); border: 1px solid var(--line);
+    color: var(--text); border-radius: 6px; padding: 7px 9px; font-size: 13px;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  input[type=text]:focus { outline: none; border-color: var(--accent); }
+  .autos { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 8px; }
+  @media (max-width: 720px) { .autos { grid-template-columns: 1fr; } }
+  .auto-card { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+  .auto-card h3 { margin: 0 0 6px; font-size: 13.5px; display: flex; gap: 8px; align-items: baseline; }
+  .auto-card .hint { color: var(--muted); font-size: 11.5px; font-weight: 400; }
+  .table-wrap { overflow-x: auto; margin-top: 8px; }
+  table.trans { border-collapse: collapse; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  table.trans th, table.trans td { border: 1px solid var(--line); padding: 0; }
+  table.trans th { background: #222c40; color: var(--muted); font-weight: 600; padding: 4px 8px; }
+  table.trans td.state { padding: 4px 8px; background: #222c40; white-space: nowrap; }
+  table.trans input { border: none; border-radius: 0; min-width: 84px; background: transparent; padding: 6px 8px; }
+  table.trans tr.accepting td.state { color: #c4b5fd; }
+  .badge { font-size: 10.5px; padding: 1px 6px; border-radius: 99px; border: 1px solid var(--line); color: var(--muted); }
+  .badge.det { color: #7dd3fc; border-color: #3b6f8f; }
+  .actions { margin-top: 14px; display: flex; gap: 10px; align-items: center; }
+  button {
+    background: var(--accent); color: white; border: none; border-radius: 7px;
+    padding: 8px 18px; font-size: 13.5px; cursor: pointer;
+  }
+  button:disabled { opacity: .5; cursor: default; }
+  button.ghost { background: transparent; border: 1px solid var(--line); color: var(--text); }
+  .spinner { display: none; width: 15px; height: 15px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+  .spinner.on { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #errors { display: none; margin-top: 12px; border: 1px solid var(--bad); background: rgba(255,93,108,.08); border-radius: 8px; padding: 10px 12px; }
+  #errors.on { display: block; }
+  #errors h4 { margin: 0 0 6px; color: var(--bad); font-size: 13px; }
+  #errors ul { margin: 0; padding-left: 18px; }
+  #errors li { margin: 2px 0; font-size: 12.5px; }
+  #result.empty #placeholder { color: var(--muted); font-size: 13px; }
+  .verdict { border-radius: 8px; padding: 12px 14px; font-size: 14px; font-weight: 600; }
+  .verdict.ok { background: rgba(47,191,113,.1); border: 1px solid var(--ok); color: #7ee2a8; }
+  .verdict.bad { background: rgba(255,93,108,.08); border: 1px solid var(--bad); color: #ff9aa4; }
+  .word {
+    margin-top: 12px; font-family: ui-monospace, Consolas, monospace; font-size: 15px;
+    background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+    word-break: break-all;
+  }
+  .word .pfx { color: #7dd3fc; }
+  .word .cyc { color: #fbbf24; }
+  section.sub { margin-top: 14px; }
+  section.sub h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); }
+  table.chain { border-collapse: collapse; width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
+  table.chain th, table.chain td { border: 1px solid var(--line); padding: 3px 7px; text-align: center; }
+  table.chain th { background: #222c40; color: var(--muted); }
+  td.acc { color: #c4b5fd; font-weight: 700; }
+  .replay { margin-top: 12px; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; }
+  .replay .stage { font-family: ui-monospace, Consolas, monospace; font-size: 13.5px; letter-spacing: 2px; min-height: 26px; word-break: break-all; }
+  .replay .stage .cur { background: var(--accent); color: #fff; border-radius: 3px; padding: 0 2px; }
+  .replay .stage .done { color: var(--muted); }
+  .replay .stage .cycpart { color: #fbbf24; }
+  .replay .states { display: flex; gap: 16px; margin: 8px 0; font-size: 13px; }
+  .replay .states b { font-family: ui-monospace, Consolas, monospace; }
+  .tag { font-size: 11px; padding: 0 6px; border-radius: 4px; margin-left: 6px; }
+  .tag.acc { background: rgba(139,92,246,.25); color: #c4b5fd; }
+  .tag.nacc { background: #2c3852; color: var(--muted); }
+  .replay .controls { display: flex; gap: 8px; margin-top: 6px; align-items: center; }
+  .replay .controls button { padding: 5px 12px; font-size: 12.5px; }
+  .legend { color: var(--muted); font-size: 11.5px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Büchi 自动机语言包含性复核台</h1>
+  <p>填写共同 ASCII 字母表与两台 Büchi 自动机（每台至多 8 个状态），
+  提交后判定 L(左) ⊆ L(右)。右侧为确定自动机，每个状态与字母恰好一条迁移。</p>
+</header>
+<main>
+  <div class="panel" id="editor">
+    <h2>规程输入</h2>
+    <label for="alphabet">共同字母表（每个非空白 ASCII 字符为一个字母）</label>
+    <input type="text" id="alphabet" value="ab" spellcheck="false">
+
+    <div class="autos">
+      <div class="auto-card" id="left-card">
+        <h3>左侧自动机 <span class="badge">NFA，允许非确定分支</span></h3>
+        <label>状态（空格或逗号分隔，至多 8 个）</label>
+        <input type="text" id="left-states" class="states-input" value="q0 q1" spellcheck="false">
+        <label>初态</label>
+        <input type="text" id="left-initial" value="q0" spellcheck="false">
+        <label>接受态（可多个）</label>
+        <input type="text" id="left-accepting" value="q1" spellcheck="false">
+        <label>按字母迁移（单元格可填多个后继，逗号分隔；留空表示无迁移）</label>
+        <div class="table-wrap" id="left-table"></div>
+      </div>
+      <div class="auto-card" id="right-card">
+        <h3>右侧自动机 <span class="badge det">确定：每格恰好一个后继</span></h3>
+        <label>状态（空格或逗号分隔，至多 8 个）</label>
+        <input type="text" id="right-states" class="states-input" value="r" spellcheck="false">
+        <label>初态</label>
+        <input type="text" id="right-initial" value="r" spellcheck="false">
+        <label>接受态（可多个）</label>
+        <input type="text" id="right-accepting" value="r" spellcheck="false">
+        <label>按字母迁移（每个状态 × 字母必须且只能定义一条）</label>
+        <div class="table-wrap" id="right-table"></div>
+      </div>
+    </div>
+
+    <div class="actions">
+      <button id="submit">提交复核</button>
+      <span class="spinner" id="spinner"></span>
+    </div>
+    <div id="errors"><h4>输入存在以下问题，已保留输入并清除旧结论：</h4><ul></ul></div>
+  </div>
+
+  <div class="panel" id="result">
+    <h2>复核结论</h2>
+    <div id="placeholder">尚未提交。提交后在此展示包含结论，或可逐字符重放的反例前缀与无限重复环。</div>
+  </div>
+</main>
+<script src="/static/app.js"></script>
+</body>
+</html>
